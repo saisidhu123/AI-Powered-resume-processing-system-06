@@ -14,9 +14,12 @@ def extract_json_from_response(text_response: str) -> Dict[str, Any]:
 
     cleaned = text_response.strip()
 
-    print("\n========== RESPONSE BEFORE JSON PARSING ==========")
-    print(repr(cleaned))
-    print("===================================================")
+    try:
+        print("\n========== RESPONSE BEFORE JSON PARSING ==========")
+        print(repr(cleaned).encode("ascii", errors="replace").decode("ascii"))
+        print("===================================================")
+    except Exception:
+        pass
 
     # Remove ```json and ``` if present
     cleaned = re.sub(r"```json\s*", "", cleaned, flags=re.IGNORECASE)
@@ -36,16 +39,22 @@ def extract_json_from_response(text_response: str) -> Dict[str, Any]:
 
     json_text = cleaned[start:end + 1].strip()
 
-    print("\n========== JSON SENT TO json.loads ==========")
-    print(json_text)
-    print("==============================================")
+    try:
+        print("\n========== JSON SENT TO json.loads ==========")
+        print(json_text.encode("ascii", errors="replace").decode("ascii"))
+        print("==============================================")
+    except Exception:
+        pass
 
     try:
         data = json.loads(json_text)
 
         if isinstance(data, dict):
             print("\n[OK] JSON PARSED SUCCESSFULLY")
-            print(data)
+            try:
+                print(str(data).encode("ascii", errors="replace").decode("ascii"))
+            except Exception:
+                pass
             return data
 
         print("[ERROR] Parsed JSON is not a dictionary")
@@ -333,3 +342,36 @@ def clean_name(name_str: str) -> str:
         return ""
     cleaned = re.sub(r"[^a-zA-Z\s]", "", str(name_str)).strip().lower()
     return " ".join(cleaned.split())
+
+
+def format_skills(sk: Any, max_items: int = 0) -> str:
+    """
+    Safely format skills into a clean, comma-separated string.
+    Prevents string slicing bugs (e.g. slicing 'Python' as ['P', 'y', 't', 'h', 'o']).
+    """
+    if not sk:
+        return "N/A"
+
+    if isinstance(sk, str):
+        if sk.strip().startswith("[") and sk.strip().endswith("]"):
+            try:
+                parsed = json.loads(sk)
+                if isinstance(parsed, list):
+                    sk = parsed
+            except Exception:
+                pass
+
+    if isinstance(sk, list):
+        clean_list = [str(x).strip() for x in sk if str(x).strip()]
+        if max_items > 0 and len(clean_list) > max_items:
+            clean_list = clean_list[:max_items]
+        return ", ".join(clean_list) if clean_list else "N/A"
+
+    if isinstance(sk, str):
+        parts = [p.strip() for p in sk.split(",") if p.strip()]
+        if max_items > 0 and len(parts) > max_items:
+            parts = parts[:max_items]
+        return ", ".join(parts) if parts else "N/A"
+
+    return str(sk)
+

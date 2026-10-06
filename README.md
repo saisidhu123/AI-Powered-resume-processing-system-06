@@ -1,113 +1,122 @@
-# AI-Powered Resume Processing System
+# AI Recruitment & Resume Intelligence Platform
 
-A high-performance, enterprise-ready automated resume screening, extraction, and candidate classification platform powered by **Groq Cloud LLM** (`groq/compound-mini` / `llama-3.3-70b-versatile`), Streamlit, Python, FastAPI, and React.
-
----
-
-## 🎯 Project Purpose & Overview
-
-Recruitment teams face significant administrative overhead manually reviewing candidate resumes, extracting personal & technical details, checking for duplicates, and compiling spreadsheet trackers. 
-
-This platform automates the end-to-end HR resume ingestion workflow:
-1. **Automated Data Extraction**: Extracts candidate name, mobile number, email address, total & relevant experience, location preferences, technical skills, notice period, current & expected CTC, education, and certifications with high-precision AI mapping.
-2. **Dynamic Excel Template Mapping**: Automatically parses custom Excel template column headers (Row 1) and dynamically maps extracted fields without fixed layout dependencies.
-3. **Parallel Bulk Processing**: Processes batches of 30+ candidate resumes concurrently with multi-worker execution and real-time progress indicators.
-4. **Technology Domain Classification**: Automatically classifies candidates into 12 tech domains (Java, Python, Oracle, Data Engineering, AI/ML, DevOps, Salesforce, SAP, Testing, Full Stack, Cloud, Others) with dual-shortlisting filter controls.
-5. **Smart Duplicate Detection**: Scans incoming resumes against existing template rows to flag duplicate candidates by email, phone, or name matching.
-6. **Consolidated Excel & Report Packaging**: Generates multi-sheet Master Excel workbooks, Duplicate Reports, Error/Missing Info Logs, Classification Analytics, and one-click ZIP download packages.
+An enterprise-ready, dual-sided AI recruitment platform for **Recruiters / HR** and **Candidates / Job Seekers**, powered by **Groq Cloud LLM** (`groq/compound-mini` / `llama-3.3-70b-versatile`), Streamlit, FastAPI, React (Vite + Tailwind CSS), and SQLite.
 
 ---
 
-## ✨ Key Features
+## 🎯 Platform Purpose & Overview
 
-- **Multi-Mode UI**: Supports both **⚡ Bulk Batch Processing (30+ Resumes)** and **🚀 Single Resume Processing**.
-- **Groq Cloud AI Acceleration**: Powered by Groq Cloud API for ultra-fast Llama-3 inference and structured JSON extraction.
-- **Deterministic Guardrails**: Combines AI extraction with date-range experience calculation and regex skill normalization.
-- **Dual-Shortlisting Engine**: Interactively filter candidates by technology domain and experience level.
-- **Automated AI Candidate Screening**: Evaluates candidate suitability and generates screening Q&A summaries.
-- **Multi-Report Excel Generation**: Auto-generates Master Excel, Flagged Duplicates Report, Error & Missing Info Log, and Technology Analytics.
+Recruitment teams face high administrative overhead manually reviewing candidate resumes, comparing them to complex Job Descriptions (JDs), tracking candidates across recruitment pipelines, and building screening reports. At the same time, job seekers lack transparency into why their resume may not match a job description, what skills they are missing, how ATS parsers read their resume, and how to reword bullet points for maximum impact.
+
+This upgraded **AI Recruitment & Resume Intelligence Platform** answers two major questions:
+
+- **RECRUITER:** *"Which candidates are most suitable for this job, why are they matched, and what evidence supports this claim?"*
+- **CANDIDATE:** *"Why may my resume not be matching this job description, what exact skills are missing, and how can I improve my resume without fabricating experience?"*
 
 ---
 
-## 💻 Technologies Used
+## ✨ Key Capabilities & Dual-Sided Features
+
+### 👔 1. RECRUITER / HR PORTAL
+- **Job Description Requirement Extractor**: Upload or paste JD text/file; automatically extracts structured required vs preferred skills, experience years, education, certifications, and responsibilities.
+- **Single & Batch Resume Screening**: Process 1 to 100+ resumes concurrently against any target JD.
+- **Transparent Weighted Match Scoring**: Calculates deterministic match scores (Required Skills 40%, Experience 25%, Preferred Skills 15%, Education 10%, Certifications 5%, Projects 5%) rather than random LLM percentages.
+- **Grounded "View Evidence"**: Displays exact quotes extracted directly from the candidate's resume for every matched skill claim.
+- **Automatic Candidate Ranking**: Ranks incoming candidate batches by match score with filter controls.
+- **Side-by-Side Candidate Comparison**: Compare selected candidate profiles side-by-side.
+- **Persistent Candidate Database & Search**: SQLite candidate storage (`candidate_db.sqlite`) with multi-attribute filtering (skills, experience, status) and search.
+- **Recruitment Pipeline Status Tracker**: Track status (`Applied` → `AI Screened` → `Shortlisted` → `Interview` → `Selected` → `Rejected`) and record recruiter audit notes.
+- **Grounded AI Interview Question Generator**: Generates targeted questions categorized by Technical, Project-based, Experience-based, Skill verification, and Role-specific topics.
+
+### 🎯 2. CANDIDATE / JOB SEEKER PORTAL
+- **Resume + JD Match Analysis**: Instant match score breakdown against any job description.
+- **"Why May My Resume Not Match?"**: Identifies potential mismatch factors (missing skills, experience gaps, generic project descriptions) with clear disclaimers that employer feedback is unknown.
+- **Missing Skills Breakdown**: Distinguishes `Strong`, `Good`, `Limited`, and `Missing` skills.
+- **Section-by-Section Analysis**: Evaluates Summary, Skills, Experience, Projects, Education, and Certifications for strengths, weaknesses, and actionable fixes.
+- **ATS Compatibility & Readability Checker**: Evaluates document word count, standard section headings, special glyph risks, date formatting, and keyword density.
+- **Grounded Wording Improvements**: Provides action-oriented bullet point rewording while strictly preserving 100% factual accuracy (never fabricates fake skills or experience).
+- **Job-Specific Resume Optimization**: Recommends targeted adjustments for the selected position.
+
+---
+
+## 📊 Transparent Scoring Methodology
+
+The overall candidate match score is **reproducible and deterministic**, computed using category weights:
+
+$$\text{Overall Score} = S_{\text{req}} + S_{\text{exp}} + S_{\text{pref}} + S_{\text{edu}} + S_{\text{cert}} + S_{\text{proj}}$$
+
+| Category | Default Weight | Description |
+| :--- | :--- | :--- |
+| **Required Skills** | **40%** | Evaluates presence and depth of mandatory JD technical skills (`Strong`: 100%, `Good`: 80%, `Limited`: 50%, `Missing`: 0%). |
+| **Experience** | **25%** | Compares candidate total/relevant experience years against minimum JD requirements. |
+| **Preferred Skills** | **15%** | Evaluates nice-to-have/desirable skills listed in the JD. |
+| **Education** | **10%** | Checks minimum degree requirement satisfaction. |
+| **Certifications** | **5%** | Evaluates required or preferred certifications. |
+| **Projects & Other** | **5%** | Checks documented technical project execution. |
+
+---
+
+## 💻 Technology Stack
 
 - **AI/LLM Provider**: Groq Cloud API (`groq/compound-mini`, `llama-3.3-70b-versatile`)
-- **Frontend & App Framework**: Streamlit (Web App), React (Vite + Tailwind CSS)
-- **Backend & REST API**: FastAPI, Uvicorn
+- **Primary Streamlit Interface**: Python Streamlit (`app.py`)
+- **Full-Stack Web Interface**: React (Vite + Tailwind CSS) in `frontend/`
+- **Backend & REST API**: FastAPI, Uvicorn in `server.py`
+- **Database & Persistence**: SQLite (`candidate_db.sqlite`) via `services/candidate_database.py`
 - **Document Parsing**: PyMuPDF (PDF), python-docx (DOCX)
 - **Data & Excel Processing**: Pandas, OpenPyXL
-- **Language & Runtime**: Python 3.10+
+- **Runtime**: Python 3.10+
 
 ---
 
-## 🔒 Groq Cloud API Integration & Secure Key Configuration
+## 🔒 Configuration & Environment Variables
 
-The system connects to Groq Cloud LLM for intelligent candidate screening and data extraction.
+Copy `.env.example` to `.env`:
 
-### Security Architecture
-- **Streamlit Secrets Support**: When deployed on **Streamlit Community Cloud**, the application reads the API key securely via `st.secrets["GROQ_API_KEY"]`.
-- **Environment Fallback**: For local development, keys are loaded from `.env` via `load_dotenv()`.
-- **Zero API Key Exposure**: API key values are never displayed in UI text, logs, error outputs, or source repositories.
-- **Git Protection**: `.env` is listed in `.gitignore` and is strictly untracked in Git.
+```ini
+HF_TOKEN=your_huggingface_token_here
+HF_MODEL=meta-llama/Llama-3.2-3B-Instruct
+```
 
-#### Setting up your API key locally:
-1. Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-2. Open `.env` and add your Groq API key (obtainable from [https://console.groq.com/keys](https://console.groq.com/keys)):
-   ```ini
-   GROQ_API_KEY=your_groq_api_key_here
-   GROQ_MODEL=groq/compound-mini
-   ```
+*For Streamlit Cloud deployment, set `HF_TOKEN` and `HF_MODEL` under **App Settings -> Secrets**.*
 
 ---
 
 ## 🚀 How to Run Locally
-
-### Prerequisites
-- Python 3.10+ installed
-- Virtual environment recommended (`python -m venv venv`)
 
 ### 1. Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Launch Streamlit Application (Primary HR Interface)
+### 2. Launch Primary Streamlit Interface (Recruiter & Candidate Portals)
 ```bash
 streamlit run app.py
 ```
 Access in browser at: `http://localhost:8501`
 
-### 3. (Optional) Launch Full-Stack FastAPI + React Server
+### 3. Launch Full-Stack FastAPI + React Interface
 ```bash
+# Build React frontend assets
+cd frontend
+npm install
+npm run build
+cd ..
+
+# Start FastAPI Uvicorn server
 python -m uvicorn server:app --host 127.0.0.1 --port 8000 --reload
 ```
-Access in browser at: `http://127.0.0.1:8000`
+Access full-stack web app in browser at: `http://127.0.0.1:8000`
 
 ---
 
-## ☁️ How to Deploy on Streamlit Community Cloud
+## 🤝 Human-in-the-Loop & Anti-Hallucination Guardrails
 
-1. **Push Repository to GitHub**: Ensure `.env` is **NOT** committed (`.gitignore` protects it).
-2. **Log into Streamlit Cloud**: Go to [https://share.streamlit.io](https://share.streamlit.io) and connect your GitHub account.
-3. **Deploy New App**:
-   - **Repository**: `your-username/your-repo-name`
-   - **Branch**: `main`
-   - **Main file path**: `app.py`
-4. **Configure Secrets**:
-   - In Streamlit Cloud App Settings -> **Secrets**, paste:
-     ```toml
-     GROQ_API_KEY = "your_groq_api_key_here"
-     GROQ_MODEL = "groq/compound-mini"
-     ```
-5. **Deploy**: Click **Deploy**. Streamlit Cloud will build the app and load secrets automatically.
+- **Final Hiring Decisions**: AI outputs decision-support scores and grounded evidence quotes. The recruiter/interviewer makes all hiring decisions.
+- **Anti-Hallucination**: Evidence snippets are extracted directly from raw resume text. Missing skills or details are flagged as "Missing" or "Unable to determine". Rewording tools never introduce fake skills, metrics, or achievements.
 
 ---
 
-## 🛡️ Important Security Notes
+## 🛡️ License & Maintenance
 
-- **Never Commit Secrets**: Never place real API key strings inside code files or commit `.env` to public version control.
-- **Repository Safety**: Always verify `.gitignore` contains `.env` before pushing changes.
-- **Error Protection**: Sanitization guardrails automatically mask authorization tokens in runtime tracebacks.
+Built for enterprise recruitment automation and candidate empowerment.

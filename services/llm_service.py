@@ -27,141 +27,163 @@ from services.field_extractor import (
 )
 
 # Load environment variables from .env if present
-load_dotenv()
+DEFAULT_LOCAL_MODEL_PATH = os.path.join(os.getcwd(), "scratch", "local_models", "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf")
 
-def get_groq_api_key() -> str:
-    """Retrieve GROQ_API_KEY securely from Streamlit Secrets or environment variables."""
+def get_local_model_path() -> str:
+    """Retrieve LOCAL_MODEL_PATH from Streamlit Secrets or environment variables."""
+    load_dotenv(override=True)
     try:
         import streamlit as st
-        if hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets:
-            key = str(st.secrets["GROQ_API_KEY"]).strip()
-            if key:
-                return key
+        if hasattr(st, "secrets") and "LOCAL_MODEL_PATH" in st.secrets:
+            path = str(st.secrets["LOCAL_MODEL_PATH"]).strip()
+            if path:
+                return path if os.path.isabs(path) else os.path.abspath(path)
     except Exception:
         pass
-    key = os.getenv("GROQ_API_KEY", "").strip()
-    if key:
-        return key
-    return ""
+    path = os.getenv("LOCAL_MODEL_PATH", "").strip()
+    if path:
+        return path if os.path.isabs(path) else os.path.abspath(path)
+    return DEFAULT_LOCAL_MODEL_PATH
 
-def get_groq_model() -> str:
-    """Retrieve GROQ_MODEL securely from Streamlit Secrets or environment variables."""
+def get_hf_token() -> str:
+    """Retrieve HF_TOKEN securely from Streamlit Secrets or environment variables."""
+    load_dotenv(override=True)
     try:
         import streamlit as st
-        if hasattr(st, "secrets") and "GROQ_MODEL" in st.secrets:
-            model = str(st.secrets["GROQ_MODEL"]).strip()
+        if hasattr(st, "secrets"):
+            for var_name in ["HF_TOKEN", "HUGGINGFACEHUB_API_TOKEN", "HF_API_KEY"]:
+                if var_name in st.secrets:
+                    key = str(st.secrets[var_name]).strip()
+                    if key:
+                        return key
+    except Exception:
+        pass
+    for var_name in ["HF_TOKEN", "HUGGINGFACEHUB_API_TOKEN", "HF_API_KEY"]:
+        key = os.getenv(var_name, "").strip()
+        if key:
+            return key
+    return ""
+
+def get_hf_model() -> str:
+    """Retrieve HF_MODEL securely from Streamlit Secrets or environment variables."""
+    load_dotenv(override=True)
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and "HF_MODEL" in st.secrets:
+            model = str(st.secrets["HF_MODEL"]).strip()
             if model:
                 return model
     except Exception:
         pass
-    model = os.getenv("GROQ_MODEL", "").strip()
+    model = os.getenv("HF_MODEL", "").strip()
     if model:
         return model
-    return "groq/compound-mini"
+    return "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF"
 
-GROQ_MODEL = get_groq_model()
+HF_MODEL = get_hf_model()
+
+# Backward compatibility aliases
+def get_groq_api_key() -> str:
+    return get_hf_token()
+
+def get_groq_model() -> str:
+    return get_hf_model()
+
+GROQ_MODEL = HF_MODEL
+
+# Singleton Local LLM Storage
+_LOCAL_LLM_INSTANCE = None
+_LOCAL_LLM_LOADED_PATH = ""
+
+def get_local_llm_instance():
+    """Returns a shared, single instance of the local GGUF model loaded in RAM."""
+    global _LOCAL_LLM_INSTANCE, _LOCAL_LLM_LOADED_PATH
+    model_path = get_local_model_path()
+
+    if not os.path.exists(model_path):
+        return None, f"Local GGUF model file not found at: {model_path}"
+
+    if _LOCAL_LLM_INSTANCE is not None and _LOCAL_LLM_LOADED_PATH == model_path:
+        return _LOCAL_LLM_INSTANCE, ""
+
+    try:
+        from llama_cpp import Llama
+        print(f"[LLM Service] Loading shared local GGUF model: {os.path.basename(model_path)} (n_gpu_layers=0, n_threads=4)...")
+        _LOCAL_LLM_INSTANCE = Llama(
+            model_path=model_path,
+            n_ctx=2048,
+            n_threads=4,
+            n_gpu_layers=0,
+            verbose=False
+        )
+        _LOCAL_LLM_LOADED_PATH = model_path
+        return _LOCAL_LLM_INSTANCE, ""
+    except Exception as e:
+        return None, f"Failed to initialize local GGUF llama-cpp model: {str(e)}"
 
 def sanitize_error_msg(err_msg: str, api_key: str = "") -> str:
-    """Sanitize error messages to ensure API keys are never exposed in UI or logs."""
+    """Sanitize error messages to ensure API keys/tokens are never exposed in UI or logs."""
     if not err_msg:
         return ""
     if api_key:
         err_msg = err_msg.replace(api_key, "[REDACTED_API_KEY]")
+    err_msg = re.sub(r"hf_[a-zA-Z0-9_-]+", "[REDACTED_API_KEY]", err_msg)
     err_msg = re.sub(r"gsk_[a-zA-Z0-9_-]+", "[REDACTED_API_KEY]", err_msg)
     err_msg = re.sub(r"Bearer\s+[a-zA-Z0-9_-]+", "Bearer [REDACTED_API_KEY]", err_msg, flags=re.IGNORECASE)
     return err_msg
 
 def check_llm_status() -> Tuple[bool, str, List[str]]:
     """
-    Check if Groq Cloud LLM API key is valid and service is accessible.
+    Check if local GGUF model file is present and operational.
     Returns (is_online, message, model_list).
     """
-    api_key = get_groq_api_key()
-    current_model = get_groq_model()
+    model_path = get_local_model_path()
+    if not os.path.exists(model_path):
+        return False, f"Local GGUF model file not found: {os.path.basename(model_path)}", []
     
-    if not api_key:
-        return False, "Groq API Key not found. Please set GROQ_API_KEY in Streamlit Secrets or .env.", []
+    # Quick instance test
+    llm, err = get_local_llm_instance()
+    if not llm:
+        return False, f"Local model loading error: {err}", []
 
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    try:
-        response = requests.get("https://api.groq.com/openai/v1/models", headers=headers, timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            models = [m.get("id", "") for m in data.get("data", [])]
-            return True, f"Groq LLM Online ({current_model})", models
-        elif response.status_code == 401:
-            return False, "Invalid Groq API Key. Please verify GROQ_API_KEY in Streamlit Secrets.", []
-        else:
-            clean_err = sanitize_error_msg(response.text, api_key)
-            return False, f"Groq API returned status {response.status_code}: {clean_err}", []
-    except requests.exceptions.RequestException as e:
-        clean_err = sanitize_error_msg(str(e), api_key)
-        return False, f"Cannot connect to Groq API ({clean_err}). Check network connection.", []
-    except Exception as e:
-        clean_err = sanitize_error_msg(str(e), api_key)
-        return False, f"Error checking Groq API status: {clean_err}", []
+    model_name = os.path.basename(model_path)
+    return True, f"Local GGUF LLM Online ({model_name})", [model_name]
 
 def check_ollama_status() -> Tuple[bool, str, List[str]]:
     """Backward compatibility alias for check_llm_status."""
     return check_llm_status()
 
-def call_groq_llm(prompt: str, temperature: float = 0.0) -> Tuple[bool, str, str]:
+def call_local_llm(prompt: str, temperature: float = 0.0, max_tokens: int = 600) -> Tuple[bool, str, str]:
     """
-    Execute structured chat completion request against Groq API.
+    Execute structured completion request against the shared local Qwen2.5-Coder GGUF model.
     Returns (success, raw_text_response, error_message).
     """
-    api_key = get_groq_api_key()
-    current_model = get_groq_model()
+    llm, err = get_local_llm_instance()
+    if not llm:
+        return False, "", err
 
-    if not api_key:
-        return False, "", "GROQ_API_KEY is not configured."
-
-    # First try using official groq SDK if installed
     try:
-        from groq import Groq
-        client = Groq(api_key=api_key)
-        response = client.chat.completions.create(
-            model=current_model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=temperature,
-            max_tokens=1024,
-            response_format={"type": "json_object"}
+        formatted_prompt = f"<|im_start|>system\nYou are a precise AI assistant. Respond directly and accurately.<|im_end|>\n<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
+        res = llm(
+            formatted_prompt,
+            max_tokens=max_tokens,
+            temperature=max(temperature, 0.01) if temperature > 0 else 0.01,
+            stop=["<|im_end|>"]
         )
-        raw_text = response.choices[0].message.content or ""
-        return True, raw_text, ""
-    except ImportError:
-        pass
-    except Exception as sdk_err:
-        print(f"[Warning] Groq SDK call failed ({str(sdk_err)}). Falling back to direct HTTP REST request.")
-
-    # Fallback to direct requests HTTP POST
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": current_model,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": temperature,
-        "max_tokens": 1024,
-        "response_format": {"type": "json_object"}
-    }
-
-    try:
-        res = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=60)
-        if res.status_code == 200:
-            res_json = res.json()
-            raw_text = res_json.get("choices", [{}])[0].get("message", {}).get("content", "")
+        raw_text = res["choices"][0]["text"].strip()
+        if raw_text:
             return True, raw_text, ""
-        else:
-            err_msg = sanitize_error_msg(f"Groq HTTP {res.status_code}: {res.text}", api_key)
-            return False, "", err_msg
+        return False, "", "Empty output generated by local GGUF model."
     except Exception as e:
-        err_msg = sanitize_error_msg(f"Groq API call exception: {str(e)}", api_key)
-        return False, "", err_msg
+        return False, "", f"Local GGUF LLM generation error: {str(e)}"
+
+def call_hf_llm(prompt: str, temperature: float = 0.0, max_tokens: int = 600) -> Tuple[bool, str, str]:
+    """Execute request via local GGUF model."""
+    return call_local_llm(prompt, temperature=temperature, max_tokens=max_tokens)
+
+def call_groq_llm(prompt: str, temperature: float = 0.0) -> Tuple[bool, str, str]:
+    """Backward compatibility alias calling local GGUF model."""
+    return call_local_llm(prompt, temperature=temperature)
 
 def classify_header_concept(header_str: str) -> str:
     """
@@ -303,12 +325,15 @@ def validate_candidate_dictionary(candidate_dict: Dict[str, Any], source_text: s
     return candidate_dict
 
 
-def extract_candidate_data(resume_text: str, excel_headers: List[str]) -> Tuple[bool, Dict[str, Any], str, str]:
+def extract_candidate_data(resume_text: str, excel_headers: List[str] = None) -> Tuple[bool, Dict[str, Any], str, str]:
     """
     Processing Architecture:
-    Resume Text -> Text Cleanup & Word Reconstruction -> Groq Cloud AI -> Experience Calculation -> Skills Normalization -> Mapping.
+    Resume Text -> Text Cleanup & Word Reconstruction -> Local GGUF AI -> Experience Calculation -> Skills Normalization -> Mapping.
     Returns (success, candidate_dict, raw_response, error_message).
     """
+    if excel_headers is None:
+        excel_headers = ["Candidate Name", "Email ID", "Mobile No", "Total Experience", "Skills", "Education", "Current CTC", "Expected CTC", "Notice Period"]
+
     if not resume_text or not resume_text.strip():
         return False, {}, "", "Resume text is empty."
 
@@ -360,12 +385,12 @@ RESUME TEXT:
     raw_llm_text = ""
     extracted_dict = {}
 
-    success_llm, raw_llm_text, err_llm = call_groq_llm(prompt, temperature=0.0)
+    success_llm, raw_llm_text, err_llm = call_hf_llm(prompt, temperature=0.0)
 
     if success_llm and raw_llm_text:
         extracted_dict = extract_json_from_response(raw_llm_text)
     else:
-        print(f"Warning: Groq Cloud LLM API call failed ({err_llm}). Using deterministic extraction fallback.")
+        print(f"Warning: Hugging Face LLM API call failed ({err_llm}). Using deterministic extraction fallback.")
 
     # Step 3: Populate final_dict using Header Concept Mapping
     final_dict = {}

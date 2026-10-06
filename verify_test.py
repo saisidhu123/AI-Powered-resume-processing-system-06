@@ -7,9 +7,9 @@ from services.llm_service import extract_candidate_data, check_llm_status
 from services.duplicate_detector import check_duplicate
 
 def run_test():
-    print("--- 1. Testing Groq LLM Status ---")
+    print("--- 1. Testing Hugging Face LLM Status ---")
     online, msg, models = check_llm_status()
-    print(f"Groq LLM Online: {online}, Message: {msg}")
+    print(f"Hugging Face LLM Online: {online}, Message: {msg}")
 
     # Create dummy PDF resume
     sample_pdf_path = "uploads/test_resume.pdf"
@@ -68,7 +68,7 @@ def run_test():
     print(f"Detected Headers: {read_hdrs}")
 
     # Test Step 3: LLM Extraction
-    print("--- 4. Extracting Data via Groq Cloud LLM ---")
+    print("--- 4. Extracting Data via Hugging Face LLM ---")
     llm_ok, cand_data, raw_llm, llm_err = extract_candidate_data(resume_text, read_hdrs)
     assert cand_data and len(cand_data) > 0, f"Extraction failed: {llm_err}"
 
